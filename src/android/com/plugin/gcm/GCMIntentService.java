@@ -3,15 +3,25 @@ package com.plugin.gcm;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.media.Ringtone;
+import android.media.RingtoneManager;
 import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.preference.PreferenceManager;
+import android.content.SharedPreferences;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
+import android.net.Uri;
+import android.app.PendingIntent.CanceledException;
+import android.provider.Settings;
+import android.media.MediaPlayer;
+
+import com.smartfmone.smartfmone.v1.R;
 
 import com.google.android.gcm.GCMBaseIntentService;
 
@@ -66,7 +76,8 @@ public class GCMIntentService extends GCMBaseIntentService {
 			// if we are in the foreground, just surface the payload, else post it to the statusbar
             if (PushPlugin.isInForeground()) {
 				extras.putBoolean("foreground", true);
-                PushPlugin.sendExtras(extras);
+                //PushPlugin.sendExtras(extras);
+				createNotification(context, extras);
 			}
 			else {
 				extras.putBoolean("foreground", false);
@@ -74,6 +85,20 @@ public class GCMIntentService extends GCMBaseIntentService {
                 // Send a notification if there is a message
                 if (extras.getString("message") != null && extras.getString("message").length() != 0) {
                     createNotification(context, extras);
+					
+					Context context2 = getApplicationContext();
+
+                    PendingIntent pendingIntent;
+                    Intent notifyIntent = new Intent();
+                    notifyIntent.setClass(context2, com.plugin.gcm.PushHandlerActivity.class);
+					notifyIntent.putExtra("pushBundlee", extras);
+                    pendingIntent =  PendingIntent.getActivity(context2, 0, notifyIntent, 0);
+                    try {
+                      pendingIntent.send();
+                  } catch (CanceledException e1) {
+                      // TODO Auto-generated catch block
+                      e1.printStackTrace();
+                  }
                 }
             }
         }
@@ -90,23 +115,79 @@ public class GCMIntentService extends GCMBaseIntentService {
 
 		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 		
-		int defaults = Notification.DEFAULT_ALL;
+        SharedPreferences app_preferences = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean vibration = app_preferences.getBoolean("com.plugin.gcm.vibration", true);
+        boolean sound = app_preferences.getBoolean("com.plugin.gcm.sound", true);
+        boolean light = app_preferences.getBoolean("com.plugin.gcm.light", true);
+        String ringtonePath = app_preferences.getString("com.plugin.gcm.ringtone", "defValue");
+        int defaults = 0;
+        if (vibration) defaults = defaults | Notification.DEFAULT_VIBRATE;
+        //if (sound) defaults = defaults | Notification.DEFAULT_SOUND;
+        if (light) defaults = defaults | Notification.DEFAULT_LIGHTS;
+        Log.v(TAG, new Integer(defaults).toString());
 
-		if (extras.getString("defaults") != null) {
-			try {
-				defaults = Integer.parseInt(extras.getString("defaults"));
-			} catch (NumberFormatException e) {}
-		}
 		
 		NotificationCompat.Builder mBuilder =
-			new NotificationCompat.Builder(context)
-				.setDefaults(defaults)
+			new NotificationCompat.Builder(context)				
 				.setSmallIcon(context.getApplicationInfo().icon)
 				.setWhen(System.currentTimeMillis())
 				.setContentTitle(extras.getString("title"))
 				.setTicker(extras.getString("title"))
+				.setContentText(extras.getString("message"))
 				.setContentIntent(contentIntent)
 				.setAutoCancel(true);
+		int notId = 0;
+        if (!ringtonePath.equals("") && sound) {
+			
+			if(ringtonePath.equals("defValue"))
+        	{
+				/*
+        		final MediaPlayer mp = MediaPlayer.create(this, Settings.System.DEFAULT_NOTIFICATION_URI); 
+        		mp.start();
+				*/
+				
+				String PushadditionalData= extras.getString("additionalData");
+				if(PushadditionalData.equals("Security"))
+				{
+					//mNotificationManager.notify((String) appName, notId, mBuilder.build());
+					Uri sounds=Uri.parse("android.resource://"+context.getPackageName()+"/"+R.raw.silent);
+					mBuilder.setSound(sounds);
+					mNotificationManager.notify(appName, notId, mBuilder.build());
+				}
+				else
+				{
+					Uri sounds=Uri.parse("android.resource://"+context.getPackageName()+"/"+R.raw.siren);
+					mBuilder.setSound(sounds);
+					mNotificationManager.notify(appName, notId, mBuilder.build());
+				}        		
+        	}
+        	else
+        	{
+				/*
+				Uri uri = Uri.parse(ringtonePath);
+				Log.v(TAG, "Playing Sound: " + uri.toString());
+				Ringtone r = RingtoneManager.getRingtone(getApplicationContext(), uri);
+				r.play();
+				*/
+				
+				String PushadditionalData= extras.getString("additionalData");
+				if(PushadditionalData.equals("Security"))
+				{					
+					//mNotificationManager.notify((String) appName, notId, mBuilder.build());
+					Uri sounds=Uri.parse("android.resource://"+context.getPackageName()+"/"+R.raw.silent);
+					mBuilder.setSound(sounds);
+					mNotificationManager.notify(appName, notId, mBuilder.build());
+				}
+				else
+				{
+					Uri sounds=Uri.parse("android.resource://"+context.getPackageName()+"/"+R.raw.siren);
+					mBuilder.setSound(sounds);
+					mNotificationManager.notify(appName, notId, mBuilder.build());
+				}				
+        	}
+			
+			//mBuilder.setSound(null);
+        }
 
 		String message = extras.getString("message");
 		if (message != null) {
@@ -119,8 +200,8 @@ public class GCMIntentService extends GCMBaseIntentService {
 		if (msgcnt != null) {
 			mBuilder.setNumber(Integer.parseInt(msgcnt));
 		}
+
 		
-		int notId = 0;
 		
 		try {
 			notId = Integer.parseInt(extras.getString("notId"));
@@ -132,9 +213,11 @@ public class GCMIntentService extends GCMBaseIntentService {
 			Log.e(TAG, "Number format exception - Error parsing Notification ID" + e.getMessage());
 		}
 		
-		mNotificationManager.notify((String) appName, notId, mBuilder.build());
+		/*
+		mNotificationManager.notify((String) appName, notId, mBuilder.build());	*/
 	}
-	
+	 
+
 	private static String getAppName(Context context)
 	{
 		CharSequence appName = 
