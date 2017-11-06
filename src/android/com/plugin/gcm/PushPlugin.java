@@ -1,9 +1,14 @@
 package com.plugin.gcm;
 
 import android.app.NotificationManager;
+import android.app.Notification;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+import android.preference.PreferenceManager;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
 import com.google.android.gcm.GCMRegistrar;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
@@ -25,6 +30,10 @@ public class PushPlugin extends CordovaPlugin {
 	public static final String REGISTER = "register";
 	public static final String UNREGISTER = "unregister";
 	public static final String EXIT = "exit";
+    public static final String GET_PUSH_SETTINGS = "getPushSettings";
+    public static final String SHOW_PUSH_SETTINGS = "showPushSettings";
+
+    private static final int RESULT_PUSH_SETTINGS = 1;
 
 	private static CordovaWebView gWebView;
 	private static String gECB;
@@ -84,6 +93,41 @@ public class PushPlugin extends CordovaPlugin {
 			Log.v(TAG, "UNREGISTER");
 			result = true;
 			callbackContext.success();
+
+		} else if (GET_PUSH_SETTINGS.equals(action)) {
+
+                Log.v(TAG, "Get Push Settings");
+
+                SharedPreferences app_preferences = PreferenceManager.getDefaultSharedPreferences(cordova.getActivity());
+                boolean vibration = app_preferences.getBoolean("com.plugin.gcm.vibration", true);
+                boolean sound = app_preferences.getBoolean("com.plugin.gcm.sound", true);
+                boolean light = app_preferences.getBoolean("com.plugin.gcm.light", true);
+                String ringtonePath = app_preferences.getString("com.plugin.gcm.ringtone", "defValue");
+                Log.v(TAG, ringtonePath);
+
+                try {
+                        JSONObject obj = new JSONObject();
+                        obj.put("vibration", vibration);
+                        obj.put("sound", sound);
+                        obj.put("light", light);
+                        obj.put("ringtone", ringtonePath);
+
+                        result = true;
+                        callbackContext.success(obj);
+
+                } catch (JSONException e) {
+
+                        result = false;
+                        callbackContext.error(e.getMessage());
+
+                }
+
+                } else if (SHOW_PUSH_SETTINGS.equals(action)) {
+            Log.v(TAG, "execute ringtone Chooser");
+            Intent i = new Intent(this.cordova.getActivity(), PushSettingsActivity.class);
+            this.cordova.getActivity().startActivityForResult(i, RESULT_PUSH_SETTINGS);
+
+            callbackContext.success();
 		} else {
 			result = false;
 			Log.e(TAG, "Invalid action : " + action);
